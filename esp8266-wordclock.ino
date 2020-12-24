@@ -31,13 +31,30 @@ uint32_t sntp_startup_delay_MS_rfc_not_less_than_60000() {
 #define DISPLAY_HET_IS 1
 #define DISPLAY_UUR_WOORD 1
 #define DISPLAY_CORNER_MINUTES 1
-#define BRIGHTNESS 5 // about 1/5 (max = 255)
+
+// NeoPixel brightness, 0 (min) to 255 (max)
+#define BRIGHTNESS 5
+
+struct ClockSettings {
+  bool display_het_is;
+  bool display_uur_woord;
+  bool display_corner_minutes;
+  
+  int color;
+  int brightness;
+  bool clock_leds_enabled;
+} settings;
 
 struct tm current_time;
 struct tm displayed_time;
+
+String webPage = "";
+bool settings_changed = false;
+bool time_not_synced_yet = true;
 bool display_should_be_updated = false;
 
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(LED_COUNT, LED_DATA_PIN, NEO_GRBW + NEO_KHZ800);
+ESP8266WebServer server(80);
 
 byte LDR_corr_type = 0;
 extern const uint16_t LDR_corr_log[];
@@ -121,6 +138,14 @@ void setup() {
   Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
 
+  // Settings setup
+  settings.display_het_is = DISPLAY_HET_IS;
+  settings.display_uur_woord = DISPLAY_UUR_WOORD;
+  settings.display_corner_minutes = DISPLAY_CORNER_MINUTES;
+  settings.color = strip.Color(0, 0, 0, 255);
+  settings.brightness = BRIGHTNESS;
+  settings.clock_leds_enabled = true;
+
   // Time setup
   configTime(MYTZ, "pool.ntp.org");
   setup_initial_time_values();
@@ -149,20 +174,192 @@ void setup() {
 
   // Led strip setup
   strip.begin();
-  strip.setBrightness(BRIGHTNESS);
+  strip.setBrightness(settings.brightness);
   strip.show(); // Turn OFF all pixels ASAP
+
+  // Webserver setup
+  web_setup_page();
+  server.onNotFound(web_404_handler);
+  server.on("/", web_settings_handler);
+  server.on("/reset", web_reset_handler);
+  server.on("/clock_leds", web_clock_leds_handler);
+  server.on("/brightness", web_brightness_handler);
+  server.on("/disp_oclock", web_disp_oclock_handler);
+  server.on("/disp_it_is", web_disp_it_is_handler);
+  server.on("/disp_single_min", web_disp_single_min_handler);
+  server.on("/led_test", web_led_test_handler);
+  server.on("/ldr_corr_type", web_ldr_corr_typ_handler);
+  server.begin();
+}
+
+void web_setup_page() {
+  // Html website for web server
+  webPage += "<h1>Wordclock Web Server</h1>";
+  webPage += "<ul><li>Unless stated otherwise, all settings are stored permanently.</li>";
+  webPage += "<li>HSV format is used for LEDs colors. Check <a href='http://colorizer.org' target='_blank'>Colorizer</a> (HSV/HSB).</li>";
+  webPage += "<li>For brightness calibration, first adjust brightness manually and then select according lightning conditions. One has time for manual brightness adjustment until the clock updates the time, i.e. max. 60 s.</li></ul>";
+
+  // General
+  webPage += "<h2>General</h2>";
+  webPage += "<p>Restart clock: <a href=\"reset\"><button>Submit</button></a></p>";
+
+  // Clock
+  webPage += "<h2>Clock</h2>";
+  webPage += "<form action='brightness'>Brightness: <input type='number' name='state' value='50' min='1' max='255' step='1'> <input type='submit' value='Submit'></form>";
+  webPage += "<form action='calib_clock_brightness'>Calibrate brightness: <input type='radio' name='state' value='1'>Bright room <input type='radio' name='state' value='0'>Dark room <input type='submit' value='Submit'></form>";
+  webPage += "<form action='disp_oclock'>Display 'Uur': <input type='radio' name='state' value='1'>On <input type='radio' name='state' value='0'>Off <input type='submit' value='Submit'></form>";
+  webPage += "<form action='disp_it_is'>Display 'Het is': <input type='radio' name='state' value='1'>On <input type='radio' name='state' value='0'>Off <input type='submit' value='Submit'></form>";
+  webPage += "<form action='disp_single_min'>Corner LEDs for single minutes: <input type='radio' name='state' value='1'>On <input type='radio' name='state' value='0'>Off <input type='submit' value='Submit'></form>";
+
+  // Other settings
+  webPage += "<h2>Other settings</h2>";
+  webPage += "<p>LED test: <a href=\"led_test\"><button>Submit</button></a></p>";
+  webPage += "<form action='ldr_corr_type'>Correction light measurement (influences the LED brightness): <select name='ldr_corr_type'><option value='0'>None (linear)</option><option value='1'>Square root</option><option value='2'>Logarithmic</option></select><input type='submit' value='Submit'></form>";
+}
+
+void redirect_to_settings() {
+    server.sendHeader("Location", "/");
+    server.send(301);
+    delay(500);
+}
+
+void web_ldr_corr_typ_handler() {
+  int state = server.arg("ldr_corr_type").toInt();
+  
+  // @todo: implement
+  
+  settings_changed = true;
+  redirect_to_settings();
+}
+
+void web_led_test_handler() {
+  flash_leds();
+  redirect_to_settings();
+}
+
+void web_disp_single_min_handler() {
+    int state = server.arg("state").toInt();
+    if (state == 1) {
+      if (!settings.display_corner_minutes) {
+        settings.display_corner_minutes = true;
+        settings_changed = true;
+      }
+    } else {
+      if (settings.display_corner_minutes) {
+        settings.display_corner_minutes = false;
+        settings_changed = true;
+      }
+    }
+    
+    redirect_to_settings();
+}
+
+void web_disp_it_is_handler() {
+    int state = server.arg("state").toInt();
+    if (state == 1) {
+      if (!settings.display_het_is) {
+        settings.display_het_is = true;
+        settings_changed = true;
+      }
+    } else {
+      if (settings.display_het_is) {
+        settings.display_het_is = false;
+        settings_changed = true;
+      }
+    }
+    
+    redirect_to_settings();
+}
+
+void web_disp_oclock_handler() {
+    int state = server.arg("state").toInt();
+    if (state == 1) {
+      if (!settings.display_uur_woord) {
+        settings.display_uur_woord = true;
+        settings_changed = true;
+      }
+    } else {
+      if (settings.display_uur_woord) {
+        settings.display_uur_woord = false;
+        settings_changed = true;
+      }
+    }
+    
+    redirect_to_settings();
+}
+
+void web_brightness_handler() {
+    int state = server.arg("state").toInt();
+    if (state > 0 && state <= 255) {
+      Serial.println("Updating brightness");
+      settings.brightness = state;
+      settings_changed = true;
+    }
+    
+    redirect_to_settings();
+}
+
+void web_clock_leds_handler() {
+    int state = server.arg("state").toInt();
+    if (state == 1) {
+      Serial.println("Enable clock LEDs");
+      settings.clock_leds_enabled = true;
+    }
+    else {
+      Serial.println("Disable clock LEDs");
+      settings.clock_leds_enabled = false;
+    }
+    settings_changed = true;
+    
+    redirect_to_settings();
+}
+
+void web_reset_handler() {
+    Serial.println("Resetting word clock");
+    redirect_to_settings();
+    ESP.reset();
+}
+
+void web_settings_handler() {
+  server.send(200, "text/html", webPage);
+}
+
+void web_404_handler() {
+  String message = "File Not Found\n\n";
+  message += "URI: ";
+  message += server.uri();
+  message += "\nMethod: ";
+  message += (server.method() == HTTP_GET) ? "GET" : "POST";
+  message += "\nArguments: ";
+  message += server.args();
+  message += "\n";
+  for (uint8_t i = 0; i < server.args(); i++) {
+    message += " " + server.argName(i) + ": " + server.arg(i) + "\n";
+  }
+  
+  server.send(404, "text/plain", message);
 }
 
 void loop() {
   if (WiFi.status() == WL_CONNECTED) {
     ArduinoOTA.handle();
+    server.handleClient();
+    
     should_update_display();
   } else {
     Serial.println("Wifi not connected, restarting");
     ESP.restart();
   }
 
-  if (display_should_be_updated) {
+  if (time_not_synced_yet) {
+    flash_leds();
+  } else if (settings_changed || display_should_be_updated) {
+    if (settings_changed) {
+      strip.setBrightness(settings.brightness);
+      strip.show();
+      settings_changed = false;
+    }
+  
     update_time_displayed();
   }
 }
@@ -181,6 +378,8 @@ void should_update_display() {
   int time_diff_in_seconds = abs(difftime(mktime(&current_time), mktime(&displayed_time)));
   if (time_diff_in_seconds >= 60 && current_time.tm_year >= (2020 - 1900)) {
     display_should_be_updated = true;
+    time_not_synced_yet = false;
+    
     displayed_time = *localtime(&now);
     displayed_time.tm_sec = 0;
   }
@@ -210,14 +409,20 @@ void onboard_led_flash(uint8_t wait) {
 }
 
 void strip_update_time_shown() {
-  strip_all_off();
+  if (!settings.clock_leds_enabled) {
+    strip.clear();
+    strip.show();
+    return;
+  }
+  
+  strip.clear();
 
   int hours = displayed_time.tm_hour;
   int minutes  = displayed_time.tm_min;
   
   // Single minutes
   int single_minutes = minutes % 5;
-  if (single_minutes > 0 && DISPLAY_CORNER_MINUTES) {
+  if (single_minutes > 0 && settings.display_corner_minutes) {
     strip_apply_mask(single_minutes_mask[single_minutes - 1]);
   }
  
@@ -235,13 +440,13 @@ void strip_update_time_shown() {
     hours = 12;
 
   // Display: Het is
-  if (DISPLAY_HET_IS)
+  if (settings.display_het_is)
     strip_apply_mask(het_is_mask);
 
   switch (five_minutes) {
     case 0:
       strip_apply_mask(hours_mask[hours]);
-      if (DISPLAY_UUR_WOORD) strip_apply_mask(uur_mask);
+      if (settings.display_uur_woord) strip_apply_mask(uur_mask);
       break;
     case 5:
       strip_apply_mask(vijf_min_mask);
@@ -309,26 +514,17 @@ void strip_update_time_shown() {
 void strip_apply_mask(byte x[]) {
   for (byte i = 0; i < 11; i++) {
     if (x[i] != 0) {
-      strip.setPixelColor(x[i] - 1, strip.Color(0, 0, 0, 255));
+      strip.setPixelColor(x[i] - 1, settings.color);
     }
   }
 }
 
-void strip_all_off() {
-  strip.clear();
-}
-
 void strip_pulse_white(uint8_t wait) {
-  for (int j = 0; j < 256; j++) { // Ramp up from 0 to 255
-    // Fill entire strip with white at gamma-corrected brightness level 'j':
-    strip.fill(strip.Color(0, 0, 0, strip.gamma8(j)));
-  }
+  strip.fill(strip.Color(0, 0, 0, strip.gamma8(255)));
   strip.show();
   delay(wait);
 
-  for (int j = 255; j >= 0; j--) { // Ramp down from 255 to 0
-    strip.fill(strip.Color(0, 0, 0, strip.gamma8(j)));
-  }
+  strip.clear();
   strip.show();
   delay(wait);
 }
