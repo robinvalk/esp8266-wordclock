@@ -208,10 +208,8 @@ void setup() {
   server.on("/disp_single_min", web_disp_single_min_handler);
   server.on("/led_test", web_led_test_handler);
   server.on("/ldr_corr_type", web_ldr_corr_typ_handler);
+  server.on("/christmas_tree", web_christmas_tree_handler);
   server.begin();
-
-  // Test Start Sequence
-  strip_test_sequence(85, 1000, strip.Color(0, 0, 0, 255));
 }
 
 void web_setup_page() {
@@ -237,6 +235,9 @@ void web_setup_page() {
   webPage += "<h2>Other settings</h2>";
   webPage += "<p>LED test: <a href=\"led_test\"><button>Submit</button></a></p>";
   webPage += "<form action='ldr_corr_type'>Correction light measurement (influences the LED brightness): <select name='ldr_corr_type'><option value='0'>None (linear)</option><option value='1'>Square root</option><option value='2'>Logarithmic</option></select><input type='submit' value='Submit'></form>";
+
+  webPage += "<h2>Fun</h2>";
+  webPage += "<p>Christmas Tree: <a href=\"christmas_tree\"><button>Submit</button></a></p>";
 }
 
 void redirect_to_settings() {
@@ -360,6 +361,11 @@ void web_404_handler() {
   }
   
   server.send(404, "text/plain", message);
+}
+
+void web_christmas_tree_handler() {
+  strip_tree(85, 5000);
+  redirect_to_settings();
 }
 
 void loop() {
@@ -604,7 +610,7 @@ void strip_tree(int sequence_interval, int wait){
   delay(500);
 
   // Draw all stars 10 times
-  for(byte i = 0; i < 10; i++){
+  for(byte i = 0; i < 7; i++){
     // draw all stars in tree_stars array
     for (byte j = 0; j < 9; j++) {
       strip.setPixelColor(tree_stars[j] - 1, strip.Color(0, 0, 0, 255));
@@ -630,17 +636,6 @@ void strip_tree(int sequence_interval, int wait){
 
   // reset leds
   strip.clear();
-}
-
-void randomizeArray(byte x[]){
-  const int arrayCount = sizeof x / sizeof x[0];
-  
-  for (int i=0; i < arrayCount; i++) {
-     int n = random(0, arrayCount);  // Integer from 0 to arrayCount-1
-     int temp = x[n];
-     x[n] =  x[i];
-     x[i] = temp;
-  }
 }
 
 void strip_pulse_white(uint8_t wait) {
