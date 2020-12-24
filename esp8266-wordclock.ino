@@ -5,10 +5,25 @@
 #include <EEPROM.h>
 #include <WiFiManager.h>
 #include <ArduinoOTA.h>
-#include <NTPtimeESP.h>
+#include <TZ.h>
+#include <time.h>
+
+// OPTIONAL: change SNTP startup delay
+// a weak function is already defined and returns 0 (RFC violation)
+// it can be redefined:
+uint32_t sntp_startup_delay_MS_rfc_not_less_than_60000() {
+    return 15000;
+}
+
+// OPTIONAL: change SNTP update delay
+// a weak function is already defined and returns 1 hour
+// it can be redefined:
+//uint32_t sntp_update_delay_MS_rfc_not_less_than_15000() {
+//    return 15000; // 15s
+//}
 
 #define PROJECT_NAME "FalkOnTime"
-#define TIME_ZONE 1
+#define MYTZ TZ_Europe_Amsterdam
 #define LED_COUNT 114
 #define LED_DATA_PIN D6
 #define LDR_SENSOR_PIN A0
@@ -18,33 +33,15 @@
 #define DISPLAY_CORNER_MINUTES 1
 #define BRIGHTNESS 5 // about 1/5 (max = 255)
 
-NTPtime NTPch("nl.pool.ntp.org");
-
-/*
- * The structure contains following fields:
- * struct strDateTime
-{
-  byte hour;
-  byte minute;
-  byte second;
-  int year;
-  byte month;
-  byte day;
-  byte dayofWeek;
-  boolean valid;
-};
- */
-strDateTime dateTime;
+struct tm current_time;
+struct tm displayed_time;
+bool display_should_be_updated = false;
 
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(LED_COUNT, LED_DATA_PIN, NEO_GRBW + NEO_KHZ800);
 
 byte LDR_corr_type = 0;
 extern const uint16_t LDR_corr_log[];
 extern const uint16_t LDR_corr_sqrt[];
-static char time_displayed[5] = {};
-static char current_time[5] = {};
-
-int summertime = 0;
 
 // Binders
 byte het_is_mask[11] = {101, 100, 81, 61, 60, 0, 0, 0, 0, 0, 0};
@@ -119,22 +116,19 @@ void on_wifi_ap_callback(WiFiManager *myWiFiManager) {
   Serial.println(myWiFiManager->getConfigPortalSSID());
 }
 
-
 void setup() {
+  // D1 mini setup
   Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
 
+  // Time setup
+  configTime(MYTZ, "pool.ntp.org");
+  setup_initial_time_values();
+
+  // Wifi setup
   WiFiManager wifiManager;
-  
-  //reset settings - for testing
-  //wifiManager.resetSettings();
-  
-  //set callback that gets called when connecting to previous WiFi fails, and enters Access Point mode
   wifiManager.setAPCallback(on_wifi_ap_callback);
   
-  // Fetches ssid and pass and tries to connect
-  // If it does not connect it starts an access point with the specified name
-  // and goes into a blocking loop awaiting configuration
   if (!wifiManager.autoConnect(PROJECT_NAME)) {
     Serial.println("failed to connect and hit timeout");
     // Reset and try again, or maybe put it to deep sleep
@@ -145,52 +139,61 @@ void setup() {
   Serial.print("IP for web server is ");
   Serial.println(WiFi.localIP());
 
+  // Setup over the air updates
   ArduinoOTA.setHostname(PROJECT_NAME);
   ArduinoOTA.onStart(on_ota_start);
   ArduinoOTA.onStart(on_ota_end);
   ArduinoOTA.onProgress(on_ota_progress);
   ArduinoOTA.onError(on_ota_error);
   ArduinoOTA.begin();
-  
+
+  // Led strip setup
   strip.begin();
   strip.setBrightness(BRIGHTNESS);
   strip.show(); // Turn OFF all pixels ASAP
 }
 
 void loop() {
-//  Serial.println("Start loop");
-  
   if (WiFi.status() == WL_CONNECTED) {
-//    Serial.println("Wifi connected");
     ArduinoOTA.handle();
-    update_time();
-    update_time_displayed();
+    should_update_display();
   } else {
     Serial.println("Wifi not connected, restarting");
     ESP.restart();
   }
+
+  if (display_should_be_updated) {
+    update_time_displayed();
+  }
 }
 
-void update_time() {
-  strDateTime newDateTime = NTPch.getNTPtime(1.0, 1);
+void setup_initial_time_values() {
+  time_t now = time(nullptr);
+  current_time = *localtime(&now);
+  displayed_time = *localtime(&now);
+}
 
-  if (newDateTime.valid) {
-    dateTime = newDateTime;
+void should_update_display() {
+  time_t now = time(nullptr);
+  current_time = *localtime(&now);
+  current_time.tm_sec = 0;
+  
+  int time_diff_in_seconds = abs(difftime(mktime(&current_time), mktime(&displayed_time)));
+  if (time_diff_in_seconds >= 60 && current_time.tm_year >= (2020 - 1900)) {
+    display_should_be_updated = true;
+    displayed_time = *localtime(&now);
+    displayed_time.tm_sec = 0;
   }
 }
 
 void update_time_displayed() {
-  byte cur_hours = dateTime.hour;
-  byte cur_minutes  = dateTime.minute;
-  sprintf(current_time, "%02d%02d", cur_hours, cur_minutes);
-
-  if (strcmp(time_displayed, current_time) != 0) {
-    Serial.println("Time not equal!");
-    Serial.println(current_time);
-    strncpy(time_displayed, current_time, 4);
+    Serial.println("Updating display to new time!");
+    Serial.println(asctime(&displayed_time));
+    
     onboard_led_flash(1000);
     strip_update_time_shown();
-  }
+    
+    display_should_be_updated = false;
 }
 
 void flash_leds() {
@@ -209,8 +212,8 @@ void onboard_led_flash(uint8_t wait) {
 void strip_update_time_shown() {
   strip_all_off();
 
-  int hours = dateTime.hour;
-  int minutes  = dateTime.minute;
+  int hours = displayed_time.tm_hour;
+  int minutes  = displayed_time.tm_min;
   
   // Single minutes
   int single_minutes = minutes % 5;
@@ -221,10 +224,10 @@ void strip_update_time_shown() {
   // Five minutes
   int five_minutes = minutes - single_minutes;
 
-//  if (five_minutes > 15) {
-//    hours++;
-//  }
-  
+  if (five_minutes <= 15) {
+    hours--;
+  }
+    
   // Hours
   if (hours > 12)
     hours = hours % 12;
@@ -309,13 +312,6 @@ void strip_apply_mask(byte x[]) {
       strip.setPixelColor(x[i] - 1, strip.Color(0, 0, 0, 255));
     }
   }
-
-  //Serial.print("LED color: H: ");
-  //Serial.print(h_clock);
-  //Serial.print(", S: ");
-  //Serial.print(s_clock);
-  //Serial.print(", V: ");
-  //Serial.println(v_clock);
 }
 
 void strip_all_off() {
