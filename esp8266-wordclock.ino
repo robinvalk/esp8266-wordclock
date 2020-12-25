@@ -33,7 +33,7 @@ uint32_t sntp_startup_delay_MS_rfc_not_less_than_60000() {
 #define DISPLAY_CORNER_MINUTES 1
 
 // NeoPixel brightness, 0 (min) to 255 (max)
-#define BRIGHTNESS 5
+#define BRIGHTNESS 100
 
 struct ClockSettings {
   bool display_het_is;
@@ -66,6 +66,7 @@ byte over_half_mask[11] = {103, 98, 83, 78, 0, 0, 0, 0, 0, 0, 0};
 byte over_mask[11] = {37, 24, 17, 4, 0, 0, 0, 0, 0, 0, 0};
 byte voor_half_mask[11] = {39, 22, 19, 2, 0, 0, 0, 0, 0, 0, 0};
 byte voor_mask[11] = {105, 96, 85, 76, 0, 0, 0, 0, 0, 0, 0};
+byte uur_mask[11] = {30, 11, 10, 0, 0, 0, 0, 0, 0, 0, 0};
 
 // Minutes
 byte vijf_min_mask[11] = {40, 21, 20, 1, 0, 0, 0, 0, 0, 0, 0};
@@ -74,7 +75,6 @@ byte kwart_min_mask[11] = {43, 38, 23, 18, 3, 0, 0, 0, 0, 0, 0};
 byte half_min_mask[11] = {104, 97, 84, 77, 0, 0, 0, 0, 0, 0, 0};
 
 // Hours
-byte uur_mask[11] = {30, 11, 10, 0, 0, 0, 0, 0, 0, 0, 0};
 byte een_uur[11] = {36, 25, 16, 0, 0, 0, 0, 0, 0, 0, 0};
 byte twee_uur[11] = {106, 95, 86, 75, 0, 0, 0, 0, 0, 0, 0};
 byte drie_uur[11] = {35, 26, 15, 6, 0, 0, 0, 0, 0, 0, 0};
@@ -218,9 +218,9 @@ void web_setup_page() {
 }
 
 void redirect_to_settings() {
+    delay(1000);
     server.sendHeader("Location", "/");
     server.send(301);
-    delay(500);
 }
 
 void web_ldr_corr_typ_handler() {
@@ -350,18 +350,40 @@ void loop() {
     Serial.println("Wifi not connected, restarting");
     ESP.restart();
   }
+  
+  if (settings_changed) {
+    strip.setBrightness(settings.brightness);
+    strip.show();
+    settings_changed = false;
+  }
 
   if (time_not_synced_yet) {
     flash_leds();
-  } else if (settings_changed || display_should_be_updated) {
-    if (settings_changed) {
-      strip.setBrightness(settings.brightness);
-      strip.show();
-      settings_changed = false;
-    }
-  
+  } else if (display_should_be_updated) {
     update_time_displayed();
   }
+}
+
+void run_time_test() {
+  bool het_is = settings.display_het_is;
+  bool uur = settings.display_uur_woord;
+
+  settings.display_het_is = false;
+  settings.display_uur_woord = false;
+  
+  time_t now = time(nullptr);
+  displayed_time = *localtime(&now);
+  for (int hour = 0; hour <= 23; hour++) {
+    displayed_time.tm_hour = hour;
+    for (int minute = 0; minute <= 55; minute += 5) {
+      displayed_time.tm_min = minute;
+      strip_update_time_shown();
+      delay(5000);
+    }
+  }
+
+  settings.display_het_is = het_is;
+  settings.display_uur_woord = uur;
 }
 
 void setup_initial_time_values() {
@@ -414,9 +436,9 @@ void strip_update_time_shown() {
     strip.show();
     return;
   }
-  
-  strip.clear();
 
+  strip.clear();
+  
   int hours = displayed_time.tm_hour;
   int minutes  = displayed_time.tm_min;
   
@@ -428,17 +450,17 @@ void strip_update_time_shown() {
  
   // Five minutes
   int five_minutes = minutes - single_minutes;
+    
+  // Hours
+  hours = hours % 12;
 
   if (five_minutes <= 15) {
     hours--;
   }
-    
-  // Hours
-  if (hours > 12)
-    hours = hours % 12;
-  if (hours == 0)
-    hours = 12;
 
+  if (hours < 0)
+    hours = 11;
+    
   // Display: Het is
   if (settings.display_het_is)
     strip_apply_mask(het_is_mask);
