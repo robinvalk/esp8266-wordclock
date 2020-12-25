@@ -33,7 +33,7 @@ uint32_t sntp_startup_delay_MS_rfc_not_less_than_60000() {
 #define DISPLAY_CORNER_MINUTES 1
 
 // NeoPixel brightness, 0 (min) to 255 (max)
-#define BRIGHTNESS 5
+#define BRIGHTNESS 255
 
 struct ClockSettings {
   bool display_het_is;
@@ -90,10 +90,10 @@ byte twaalf_uur[11] = {110, 91, 90, 71, 70, 51, 0, 0, 0, 0, 0};
 byte* hours_mask[12] = {een_uur, twee_uur, drie_uur, vier_uur, vijf_uur, zes_uur, zeven_uur, acht_uur, negen_uur, tien_uur, elf_uur, twaalf_uur};
 
 // Single minutes
-byte min_1[11] = {113,   0,   0,  0, 0, 0, 0, 0, 0, 0, 0};
-byte min_2[11] = {113, 112,   0,  0, 0, 0, 0, 0, 0, 0, 0};
-byte min_3[11] = {113, 112, 111,  0, 0, 0, 0, 0, 0, 0, 0};
-byte min_4[11] = {113, 112, 111, 114, 0, 0, 0, 0, 0, 0, 0};
+byte min_1[11] = {112,   0,   0,  0, 0, 0, 0, 0, 0, 0, 0};
+byte min_2[11] = {112, 113,   0,  0, 0, 0, 0, 0, 0, 0, 0};
+byte min_3[11] = {112, 113, 114,  0, 0, 0, 0, 0, 0, 0, 0};
+byte min_4[11] = {112, 113, 114, 111, 0, 0, 0, 0, 0, 0, 0};
 byte* single_minutes_mask[4] = {min_1, min_2, min_3, min_4};
 
 // Rows
@@ -113,7 +113,7 @@ byte minutes[11] = {112, 113, 111, 114, 0, 0, 0, 0, 0, 0, 0};
 byte* test_sequence[11] = {row1, row2, row3, row4, row5, row6, row7, row8, row9, row10, minutes};
 byte tree[50] = {60, 59, 63, 58, 43, 64, 57, 44, 76, 65, 56, 45, 36, 75, 66, 55, 46, 35, 87, 74, 67, 54, 47, 34, 27, 88, 73, 68, 53, 48, 33, 28, 92, 89, 72, 69, 52, 49, 32, 29, 12};
 byte tree_balls[9] = {69, 43, 29, 48, 64, 92, 74, 35, 55};
-byte tree_stars[9] = {26, 81, 1, 104, 39, 84, 6, 94, 18};
+byte tree_stars[15] = {26, 81, 1, 104, 39, 84, 6, 94, 18, 99, 95, 8, 42, 80, 1};
 
 void on_ota_start() {
   Serial.println("OTA Start\n");
@@ -364,7 +364,7 @@ void web_404_handler() {
 }
 
 void web_christmas_tree_handler() {
-  strip_tree(85, 5000);
+  strip_tree(85, 100);
   redirect_to_settings();
 }
 
@@ -424,12 +424,12 @@ void update_time_displayed() {
 }
 
 void flash_leds() {
-  uint8_t wait = 1000;
+  int wait = 1000;
   strip_pulse_white(wait);
   onboard_led_flash(wait);
 }
 
-void onboard_led_flash(uint8_t wait) {
+void onboard_led_flash(int wait) {
   digitalWrite(LED_BUILTIN, LOW);
   delay(wait);
   digitalWrite(LED_BUILTIN, HIGH);
@@ -437,12 +437,14 @@ void onboard_led_flash(uint8_t wait) {
 }
 
 void strip_update_time_shown() {
+  // If leds are not enabled, clear strip and exit
   if (!settings.clock_leds_enabled) {
     strip.clear();
     strip.show();
     return;
   }
-  
+
+  // Clear whole strip
   strip.clear();
 
   int hours = displayed_time.tm_hour;
@@ -474,7 +476,7 @@ void strip_update_time_shown() {
   switch (five_minutes) {
     case 0:
       strip_apply_mask(hours_mask[hours]);
-      if (settings.display_uur_woord) strip_apply_mask(uur_mask);
+      if (settings.display_uur_woord) strip_apply_mask(uur_mask);  
       break;
     case 5:
       strip_apply_mask(vijf_min_mask);
@@ -583,13 +585,14 @@ void strip_tree(int sequence_interval, int wait){
   }
 
   // Draw Base
-  strip.setPixelColor(69, strip.Color(139, 69, 19, 0));
+  uint32_t brown = strip.gamma32(strip.Color(139, 69, 19, 0));
+  strip.setPixelColor(69, brown);
   strip.show();
   delay(sequence_interval);
-  strip.setPixelColor(50, strip.Color(139, 69, 19, 0));
+  strip.setPixelColor(50, brown);
   strip.show();
   delay(sequence_interval);
-  strip.setPixelColor(49, strip.Color(139, 69, 19, 0));
+  strip.setPixelColor(49, brown);
   strip.show();
 
   delay(500);
@@ -609,21 +612,41 @@ void strip_tree(int sequence_interval, int wait){
 
   delay(500);
 
-  // Draw all stars 10 times
-  for(byte i = 0; i < 7; i++){
-    // draw all stars in tree_stars array
-    for (byte j = 0; j < 9; j++) {
-      strip.setPixelColor(tree_stars[j] - 1, strip.Color(0, 0, 0, 255));
+  // Draw all stars 7 times
+  for(byte i = 0; i < 12; i++){
+
+    // Draw all stars in tree_stars array
+    for (byte j = 0; j < 15; j++) {
+      
+      // Create random multiplier for delay between stars
+      int randomMultiplier = random(1, 2);
+      // Create random intensity value
+      //int randomIntensity = random(50, 255);
+      // Create random r value
+      int randomR = random(0, 255);
+      // Create random g value
+      int randomG = random(0, 255);
+      // Create random b value
+      int randomB = random(0, 255);
+      
+      
+      strip.setPixelColor(tree_stars[j] - 1, strip.Color(randomR, randomG, randomB, 0));
       strip.show();
-      delay(sequence_interval*2);
+      delay(sequence_interval*randomMultiplier);
   
-      // set star back to off
-      strip.setPixelColor(tree_stars[j] - 1, strip.Color(0, 0, 0, 0));
-      strip.show();
-      delay(sequence_interval*2);
+      // If there is a previous enabled star set previous enabled star back to off
+      if(j != 0){
+        strip.setPixelColor(tree_stars[j - 1] - 1, strip.Color(0, 0, 0, 0));
+        strip.show();
+        delay(sequence_interval*randomMultiplier);
+      }
     }
 
-    // randomize star array
+    // Turn off last star from tree_stars array
+    strip.setPixelColor(tree_stars[14] - 1, strip.Color(0, 0, 0, 0));
+    strip.show();
+
+    // Randomize star array
     for (int h=0; h < 9; h++) {
        int n = random(0, 9);  // Integer from 0 to 9-1
        int temp = tree_stars[n];
@@ -638,7 +661,47 @@ void strip_tree(int sequence_interval, int wait){
   strip.clear();
 }
 
-void strip_pulse_white(uint8_t wait) {
+void strip_dutch_flag(int wait) {
+  for (byte i = 0; i < 11; i++) {
+    if (row3[i] != 0) {
+      strip.setPixelColor(row3[i] - 1, strip.Color(255, 0, 0, 0));
+    }
+  }
+  for (byte i = 0; i < 11; i++) {
+    if (row4[i] != 0) {
+      strip.setPixelColor(row4[i] - 1, strip.Color(255, 0, 0, 0));
+    }
+  }
+  for (byte i = 0; i < 11; i++) {
+    if (row5[i] != 0) {
+      strip.setPixelColor(row5[i] - 1, strip.Color(0, 0, 0, 255));
+    }
+  }
+  for (byte i = 0; i < 11; i++) {
+    if (row6[i] != 0) {
+      strip.setPixelColor(row6[i] - 1, strip.Color(0, 0, 0, 255));
+    }
+  }
+  for (byte i = 0; i < 11; i++) {
+    if (row7[i] != 0) {
+      strip.setPixelColor(row7[i] - 1, strip.Color(0, 0, 255, 0));
+    }
+  }
+  for (byte i = 0; i < 11; i++) {
+    if (row8[i] != 0) {
+      strip.setPixelColor(row8[i] - 1, strip.Color(0, 0, 255, 0));
+    }
+  }
+
+  strip.show();
+
+  delay(wait);
+
+  strip.clear();
+  strip.show();
+}
+
+void strip_pulse_white(int wait) {
   strip.fill(strip.Color(0, 0, 0, strip.gamma8(255)));
   strip.show();
   delay(wait);
