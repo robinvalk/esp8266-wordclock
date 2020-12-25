@@ -96,6 +96,25 @@ byte min_3[11] = {113, 112, 111,  0, 0, 0, 0, 0, 0, 0, 0};
 byte min_4[11] = {113, 112, 111, 114, 0, 0, 0, 0, 0, 0, 0};
 byte* single_minutes_mask[4] = {min_1, min_2, min_3, min_4};
 
+// Rows
+byte row1[11] = {101,  100, 81,  80,  61,  60,  41,  40,  21,  20,  1};
+byte row2[11] = {102, 99,  82,  79,  62,  59,  42,  39,  22,  19,  2};
+byte row3[11] = {103, 98,  83,  78,  63,  58,  43,  38,  23,  18,  3};
+byte row4[11] = {104, 97,  84,  77,  64,  57,  44,  37,  24,  17,  4};
+byte row5[11] = {105, 96,  85,  76,  65,  56,  45,  36,  25,  16,  5};
+byte row6[11] = {106, 95,  86,  75,  66,  55,  46,  35,  26,  15,  6};
+byte row7[11] = {107, 94,  87,  74,  67,  54,  47,  34,  27,  14,  7};
+byte row8[11] = {108, 93,  88,  73,  68,  53,  48,  33,  28,  13,  8};
+byte row9[11] = {109, 92,  89,  72,  69,  52,  49,  32,  29,  12,  9};
+byte row10[11] = {110, 91,  90,  71,  70,  51,  50,  31,  30,  11,  10};
+byte minutes[11] = {112, 113, 111, 114, 0, 0, 0, 0, 0, 0, 0};
+
+// Misc Masks
+byte* test_sequence[11] = {row1, row2, row3, row4, row5, row6, row7, row8, row9, row10, minutes};
+byte tree[50] = {60, 59, 63, 58, 43, 64, 57, 44, 76, 65, 56, 45, 36, 75, 66, 55, 46, 35, 87, 74, 67, 54, 47, 34, 27, 88, 73, 68, 53, 48, 33, 28, 92, 89, 72, 69, 52, 49, 32, 29, 12};
+byte tree_balls[9] = {69, 43, 29, 48, 64, 92, 74, 35, 55};
+byte tree_stars[15] = {26, 81, 1, 104, 39, 84, 6, 94, 18, 99, 95, 8, 42, 80, 1};
+
 void on_ota_start() {
   Serial.println("OTA Start\n");
 }
@@ -189,6 +208,7 @@ void setup() {
   server.on("/disp_single_min", web_disp_single_min_handler);
   server.on("/led_test", web_led_test_handler);
   server.on("/ldr_corr_type", web_ldr_corr_typ_handler);
+  server.on("/christmas_tree", web_christmas_tree_handler);
   server.begin();
 }
 
@@ -215,6 +235,9 @@ void web_setup_page() {
   webPage += "<h2>Other settings</h2>";
   webPage += "<p>LED test: <a href=\"led_test\"><button>Submit</button></a></p>";
   webPage += "<form action='ldr_corr_type'>Correction light measurement (influences the LED brightness): <select name='ldr_corr_type'><option value='0'>None (linear)</option><option value='1'>Square root</option><option value='2'>Logarithmic</option></select><input type='submit' value='Submit'></form>";
+
+  webPage += "<h2>Fun</h2>";
+  webPage += "<p>Christmas Tree: <a href=\"christmas_tree\"><button>Submit</button></a></p>";
 }
 
 void redirect_to_settings() {
@@ -234,6 +257,11 @@ void web_ldr_corr_typ_handler() {
 
 void web_led_test_handler() {
   flash_leds();
+  redirect_to_settings();
+}
+
+void web_christmas_tree_handler() {
+  strip_tree(85, 100);
   redirect_to_settings();
 }
 
@@ -418,12 +446,12 @@ void update_time_displayed() {
 }
 
 void flash_leds() {
-  uint8_t wait = 1000;
+  int wait = 1000;
   strip_pulse_white(wait);
   onboard_led_flash(wait);
 }
 
-void onboard_led_flash(uint8_t wait) {
+void onboard_led_flash(int wait) {
   digitalWrite(LED_BUILTIN, LOW);
   delay(wait);
   digitalWrite(LED_BUILTIN, HIGH);
@@ -549,6 +577,118 @@ void strip_pulse_white(uint8_t wait) {
   strip.clear();
   strip.show();
   delay(wait);
+}
+
+void strip_test_sequence(int sequence_interval, int wait, uint32_t color) {
+  // set max brightness
+  strip.setBrightness(255);
+  strip.show();
+  
+  // loop through all rows
+  for(int i = 0; i < 11; i++){
+    // loop through all pixels per row
+    for (byte j = 0; j < 11; j++) {
+      if (test_sequence[i][j] != 0) {
+        strip.setPixelColor(test_sequence[i][j] - 1, color);
+        strip.show();
+        delay(sequence_interval);
+      }
+    }
+  }
+
+  delay(wait);
+
+  // reset leds
+  strip.clear();
+
+  // set to default brightness
+  strip.setBrightness(BRIGHTNESS);
+  strip.show();
+}
+
+void strip_tree(int sequence_interval, int wait){
+  // Draw tree
+  for (byte i = 0; i < 50; i++) {
+    strip.setPixelColor(tree[i] - 1, strip.Color(0, 255, 0, 0));
+    strip.show();
+    delay(sequence_interval);
+  }
+
+  // Draw Base
+  uint32_t brown = strip.gamma32(strip.Color(139, 69, 19, 0));
+  strip.setPixelColor(69, brown);
+  strip.show();
+  delay(sequence_interval);
+  strip.setPixelColor(50, brown);
+  strip.show();
+  delay(sequence_interval);
+  strip.setPixelColor(49, brown);
+  strip.show();
+
+  delay(500);
+
+  // Draw red balls
+  for (byte i = 0; i < 9; i++) {
+    strip.setPixelColor(tree_balls[i] - 1, strip.Color(255, 0, 0, 0));
+    strip.show();
+    delay(sequence_interval*2);
+  }
+
+  delay(500);
+
+  // Draw Top
+  strip.setPixelColor(59, strip.Color(0, 0, 0, 255));
+  strip.show();
+
+  delay(500);
+
+  // Draw all stars 7 times
+  for(byte i = 0; i < 12; i++){
+
+    // Draw all stars in tree_stars array
+    for (byte j = 0; j < 15; j++) {
+      
+      // Create random multiplier for delay between stars
+      int randomMultiplier = random(1, 2);
+      // Create random intensity value
+      //int randomIntensity = random(50, 255);
+      // Create random r value
+      int randomR = random(0, 255);
+      // Create random g value
+      int randomG = random(0, 255);
+      // Create random b value
+      int randomB = random(0, 255);
+      
+      
+      strip.setPixelColor(tree_stars[j] - 1, strip.Color(randomR, randomG, randomB, 0));
+      strip.show();
+      delay(sequence_interval*randomMultiplier);
+  
+      // If there is a previous enabled star set previous enabled star back to off
+      if(j != 0){
+        strip.setPixelColor(tree_stars[j - 1] - 1, strip.Color(0, 0, 0, 0));
+        strip.show();
+        delay(sequence_interval*randomMultiplier);
+      }
+    }
+
+    // Turn off last star from tree_stars array
+    strip.setPixelColor(tree_stars[14] - 1, strip.Color(0, 0, 0, 0));
+    strip.show();
+
+    // Randomize star array
+    for (int h=0; h < 9; h++) {
+       int n = random(0, 9);  // Integer from 0 to 9-1
+       int temp = tree_stars[n];
+       tree_stars[n] =  tree_stars[h];
+       tree_stars[h] = temp;
+    }
+  }
+  
+  delay(wait);
+
+  // reset leds
+  strip.clear();
 }
 
 int read_light_level() {
