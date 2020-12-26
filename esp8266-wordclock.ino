@@ -242,6 +242,10 @@ void web_setup_page() {
 
 void redirect_to_settings() {
     delay(1000);
+    
+    server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    server.sendHeader("Pragma", "no-cache");
+    server.sendHeader("Expires", "-1");
     server.sendHeader("Location", "/");
     server.send(301);
 }
@@ -602,11 +606,15 @@ void strip_test_sequence(int sequence_interval, int wait, uint32_t color) {
   strip.clear();
 
   // set to default brightness
-  strip.setBrightness(BRIGHTNESS);
+  strip.setBrightness(settings.brightness);
   strip.show();
 }
 
 void strip_tree(int sequence_interval, int wait){
+  strip.clear();
+  strip.show();
+  delay(wait);
+  
   // Draw tree
   for (byte i = 0; i < 50; i++) {
     strip.setPixelColor(tree[i] - 1, strip.Color(0, 255, 0, 0));
