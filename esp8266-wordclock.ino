@@ -640,15 +640,8 @@ void strip_test_sequence(int sequence_interval, int wait, uint32_t color) {
   strip.show();
 }
 
-<<<<<<< HEAD
 void strip_tree(int sequence_interval, long wait){
-=======
-void strip_tree(int sequence_interval, int wait){
-  strip.clear();
-  strip.show();
-  delay(wait);
-  
->>>>>>> main
+
   // Draw tree
   for (byte i = 0; i < 41; i++) {
     strip.setPixelColor(tree[i] - 1, strip.Color(0, 255, 0, 0));
