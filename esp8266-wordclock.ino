@@ -33,7 +33,7 @@ uint32_t sntp_startup_delay_MS_rfc_not_less_than_60000() {
 #define DISPLAY_CORNER_MINUTES 1
 
 // NeoPixel brightness, 0 (min) to 255 (max)
-#define BRIGHTNESS 100
+#define BRIGHTNESS 80
 
 struct ClockSettings {
   bool display_het_is;
@@ -721,6 +721,49 @@ void strip_tree(int sequence_interval, long wait){
     }
     
   } while (millis() < start_time_millis + wait);
+
+  delay(500);
+  
+  // reset leds
+  strip.clear();
+  strip.show();
+}
+
+void strip_new_year(long wait) {
+  unsigned long start_time_millis = millis();
+
+  int previousLed;
+  do {
+
+    int randomColIndex = random(0,9);
+    int randomColItemIndex = random(0,10);
+    int randomLed = columns[randomColIndex][randomColItemIndex];
+      
+    // Create random multiplier for delay between stars
+    int randomMultiplier = random(1, 3);
+    // Create random intensity value
+    //int randomIntensity = random(50, 255);
+    // Create random r value
+    int randomR = random(0, 255);
+    // Create random g value
+    int randomG = random(0, 255);
+    // Create random b value
+    int randomB = random(0, 255);
+    
+    strip.setPixelColor(randomLed - 1, strip.Color(randomR, randomG, randomB, 0));
+    strip.show();
+    delay(50*randomMultiplier);
+
+    // If there is a previous enabled star set previous enabled star back to off
+    if(previousLed != randomLed){
+      strip.setPixelColor(previousLed - 1, strip.Color(0, 0, 0, 0));
+      strip.show();
+      delay(50*randomMultiplier);
+    }
+
+    previousLed = randomLed;
+    
+  } while (millis() < (start_time_millis + wait));
 
   delay(500);
   
