@@ -283,8 +283,6 @@ void web_led_test_handler() {
 }
 
 void web_christmas_tree_handler() {
-  strip.clear();
-  strip.show();
   strip_tree(85, 10000);
   redirect_to_settings();
 }
@@ -512,23 +510,18 @@ void strip_update_time_shown() {
 
   if (hours < 0)
     hours = 11;
-    
+
+  // If first minute of the whole hour, display christmas tree
+  if(settings.hour_specials && minutes == 0) {
+    strip_tree(100, 8000);
+  }
+      
   // Display: Het is
   if (settings.display_het_is)
     strip_apply_mask(het_is_mask);
 
   switch (five_minutes) {
     case 0:
-
-      // If first minute of the whole hour, display christmas tree
-      if(settings.hour_specials && single_minutes == 0) {
-        strip.clear();
-        strip_tree(100, 8000);
-
-        if (settings.display_het_is)
-          strip_apply_mask(het_is_mask);
-      }
-
       strip_apply_mask(hours_mask[hours]);
       if (settings.display_uur_woord) strip_apply_mask(uur_mask);
       break;
@@ -641,6 +634,9 @@ void strip_test_sequence(int sequence_interval, int wait, uint32_t color) {
 }
 
 void strip_tree(int sequence_interval, long wait){
+
+  strip.clear();
+  strip.show();
 
   // Draw tree
   for (byte i = 0; i < 41; i++) {
