@@ -33,7 +33,7 @@ uint32_t sntp_startup_delay_MS_rfc_not_less_than_60000() {
 #define DISPLAY_CORNER_MINUTES 1
 
 // NeoPixel brightness, 0 (min) to 255 (max)
-#define BRIGHTNESS 100
+#define BRIGHTNESS 80
 
 struct ClockSettings {
   bool display_het_is;
@@ -43,6 +43,8 @@ struct ClockSettings {
   int color;
   int brightness;
   bool clock_leds_enabled;
+
+  bool hour_specials;
 } settings;
 
 struct tm current_time;
@@ -90,10 +92,10 @@ byte twaalf_uur[11] = {110, 91, 90, 71, 70, 51, 0, 0, 0, 0, 0};
 byte* hours_mask[12] = {een_uur, twee_uur, drie_uur, vier_uur, vijf_uur, zes_uur, zeven_uur, acht_uur, negen_uur, tien_uur, elf_uur, twaalf_uur};
 
 // Single minutes
-byte min_1[11] = {113,   0,   0,  0, 0, 0, 0, 0, 0, 0, 0};
-byte min_2[11] = {113, 112,   0,  0, 0, 0, 0, 0, 0, 0, 0};
-byte min_3[11] = {113, 112, 111,  0, 0, 0, 0, 0, 0, 0, 0};
-byte min_4[11] = {113, 112, 111, 114, 0, 0, 0, 0, 0, 0, 0};
+byte min_1[11] = {112,   0,   0,  0, 0, 0, 0, 0, 0, 0, 0};
+byte min_2[11] = {112, 113,   0,  0, 0, 0, 0, 0, 0, 0, 0};
+byte min_3[11] = {112, 113, 114,  0, 0, 0, 0, 0, 0, 0, 0};
+byte min_4[11] = {112, 113, 114, 111, 0, 0, 0, 0, 0, 0, 0};
 byte* single_minutes_mask[4] = {min_1, min_2, min_3, min_4};
 
 // Rows
@@ -107,6 +109,21 @@ byte row7[11] = {107, 94,  87,  74,  67,  54,  47,  34,  27,  14,  7};
 byte row8[11] = {108, 93,  88,  73,  68,  53,  48,  33,  28,  13,  8};
 byte row9[11] = {109, 92,  89,  72,  69,  52,  49,  32,  29,  12,  9};
 byte row10[11] = {110, 91,  90,  71,  70,  51,  50,  31,  30,  11,  10};
+
+// Columns
+byte col1[10] = {101, 102, 103, 104, 105, 106, 107, 108, 109, 110};
+byte col2[10] = {100, 99, 98, 97, 96, 95, 94, 93, 92, 91};
+byte col3[10] = {81, 82, 83, 84, 85, 86, 87, 88, 89, 90};
+byte col4[10] = {80, 79, 78, 77, 76, 75, 74, 73, 72, 71};
+byte col5[10] = {61, 62, 63, 64, 65, 66, 67, 68, 69, 70};
+byte col6[10] = {60, 59, 58, 57, 56, 55, 54, 53, 52, 51};
+byte col7[10] = {41, 42, 43, 44, 45, 46, 47, 48, 49, 50};
+byte col8[10] = {40, 39, 38, 37, 36, 35, 34, 33, 32, 31};
+byte col9[10] = {21, 22, 23, 24, 25, 26, 27, 28, 29, 30};
+byte col10[10] = {20, 19, 18, 17, 16, 15, 14, 13, 12,  11};
+byte col11[10] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+byte* columns[11] = {col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11};
+
 byte minutes[11] = {112, 113, 111, 114, 0, 0, 0, 0, 0, 0, 0};
 
 // Misc Masks
@@ -164,6 +181,7 @@ void setup() {
   settings.color = strip.Color(0, 0, 0, 255);
   settings.brightness = BRIGHTNESS;
   settings.clock_leds_enabled = true;
+  settings.hour_specials = true;
 
   // Time setup
   configTime(MYTZ, "pool.ntp.org");
@@ -265,7 +283,7 @@ void web_led_test_handler() {
 }
 
 void web_christmas_tree_handler() {
-  strip_tree(85, 100);
+  strip_tree(85, 10000);
   redirect_to_settings();
 }
 
@@ -492,7 +510,12 @@ void strip_update_time_shown() {
 
   if (hours < 0)
     hours = 11;
-    
+
+  // If first minute of the whole hour, display christmas tree
+  if(settings.hour_specials && minutes == 0) {
+    strip_tree(100, 8000);
+  }
+      
   // Display: Het is
   if (settings.display_het_is)
     strip_apply_mask(het_is_mask);
@@ -610,13 +633,13 @@ void strip_test_sequence(int sequence_interval, int wait, uint32_t color) {
   strip.show();
 }
 
-void strip_tree(int sequence_interval, int wait){
+void strip_tree(int sequence_interval, long wait){
+
   strip.clear();
   strip.show();
-  delay(wait);
-  
+
   // Draw tree
-  for (byte i = 0; i < 50; i++) {
+  for (byte i = 0; i < 41; i++) {
     strip.setPixelColor(tree[i] - 1, strip.Color(0, 255, 0, 0));
     strip.show();
     delay(sequence_interval);
@@ -650,8 +673,9 @@ void strip_tree(int sequence_interval, int wait){
 
   delay(500);
 
-  // Draw all stars 7 times
-  for(byte i = 0; i < 12; i++){
+  unsigned long start_time_millis = millis();
+  
+  do {
 
     // Draw all stars in tree_stars array
     for (byte j = 0; j < 15; j++) {
@@ -691,12 +715,57 @@ void strip_tree(int sequence_interval, int wait){
        tree_stars[n] =  tree_stars[h];
        tree_stars[h] = temp;
     }
-  }
-  
-  delay(wait);
+    
+  } while (millis() < start_time_millis + wait);
 
+  delay(500);
+  
   // reset leds
   strip.clear();
+  strip.show();
+}
+
+void strip_new_year(long wait) {
+  unsigned long start_time_millis = millis();
+
+  int previousLed;
+  do {
+
+    int randomColIndex = random(0,9);
+    int randomColItemIndex = random(0,10);
+    int randomLed = columns[randomColIndex][randomColItemIndex];
+      
+    // Create random multiplier for delay between stars
+    int randomMultiplier = random(1, 3);
+    // Create random intensity value
+    //int randomIntensity = random(50, 255);
+    // Create random r value
+    int randomR = random(0, 255);
+    // Create random g value
+    int randomG = random(0, 255);
+    // Create random b value
+    int randomB = random(0, 255);
+    
+    strip.setPixelColor(randomLed - 1, strip.Color(randomR, randomG, randomB, 0));
+    strip.show();
+    delay(50*randomMultiplier);
+
+    // If there is a previous enabled star set previous enabled star back to off
+    if(previousLed != randomLed){
+      strip.setPixelColor(previousLed - 1, strip.Color(0, 0, 0, 0));
+      strip.show();
+      delay(50*randomMultiplier);
+    }
+
+    previousLed = randomLed;
+    
+  } while (millis() < (start_time_millis + wait));
+
+  delay(500);
+  
+  // reset leds
+  strip.clear();
+  strip.show();
 }
 
 int read_light_level() {
