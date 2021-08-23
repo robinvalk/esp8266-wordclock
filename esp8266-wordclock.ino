@@ -12,7 +12,7 @@
 // a weak function is already defined and returns 0 (RFC violation)
 // it can be redefined:
 uint32_t sntp_startup_delay_MS_rfc_not_less_than_60000() {
-    return 15000;
+    return 60000;
 }
 
 // OPTIONAL: change SNTP update delay
