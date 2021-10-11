@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "wordclock_config.h": "c",
+        "led_strip.h": "c",
+        "functional": "cpp"
+    }
+}

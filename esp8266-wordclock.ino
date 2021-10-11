@@ -38,7 +38,7 @@ struct ClockSettings {
   bool display_het_is;
   bool display_uur_woord;
   bool display_corner_minutes;
-  
+
   int color;
   int brightness;
   bool clock_leds_enabled;
@@ -127,35 +127,6 @@ byte tree[50] = {60, 59, 63, 58, 43, 64, 57, 44, 76, 65, 56, 45, 36, 75, 66, 55,
 byte tree_balls[9] = {69, 43, 29, 48, 64, 92, 74, 35, 55};
 byte tree_stars[15] = {26, 81, 1, 104, 39, 84, 6, 94, 18, 99, 95, 8, 42, 80, 1};
 
-void on_ota_start() {
-  Serial.println("OTA Start\n");
-}
-
-void on_ota_end() {
-  Serial.println("OTA End\n");
-}
-
-void on_ota_progress(unsigned int progress, unsigned int total) {
-  char buf[32];
-  memset(buf, '\0', sizeof(buf));
-  snprintf(buf, sizeof(buf) - 1, "Upgrade - %02u%%\n", (progress / (total / 100)));
-  Serial.println(buf);
-}
-
-void on_ota_error(ota_error_t error) {
-  Serial.println("Error - ");
-
-  if (error == OTA_AUTH_ERROR)
-    Serial.println("Auth Failed\n");
-  else if (error == OTA_BEGIN_ERROR)
-    Serial.println("Begin Failed\n");
-  else if (error == OTA_CONNECT_ERROR)
-    Serial.println("Connect Failed\n");
-  else if (error == OTA_RECEIVE_ERROR)
-    Serial.println("Receive Failed\n");
-  else if (error == OTA_END_ERROR)
-    Serial.println("End Failed\n");
-}
 
 void on_wifi_ap_callback(WiFiManager *myWiFiManager) {
   Serial.println("Entered config mode");
@@ -185,14 +156,14 @@ void setup() {
   // Wifi setup
   WiFiManager wifiManager;
   wifiManager.setAPCallback(on_wifi_ap_callback);
-  
+
   if (!wifiManager.autoConnect(PROJECT_NAME)) {
     Serial.println("failed to connect and hit timeout");
     // Reset and try again, or maybe put it to deep sleep
     ESP.restart(); // originally ESP.reset()
     delay(1000);
   }
-  
+
   Serial.print("IP for web server is ");
   Serial.println(WiFi.localIP());
 
@@ -253,7 +224,7 @@ void web_setup_page() {
 
 void redirect_to_settings() {
     delay(1000);
-    
+
     server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     server.sendHeader("Pragma", "no-cache");
     server.sendHeader("Expires", "-1");
@@ -285,7 +256,7 @@ void web_disp_single_min_handler() {
         settings_changed = true;
       }
     }
-    
+
     redirect_to_settings();
 }
 
@@ -302,7 +273,7 @@ void web_disp_it_is_handler() {
         settings_changed = true;
       }
     }
-    
+
     redirect_to_settings();
 }
 
@@ -319,7 +290,7 @@ void web_disp_oclock_handler() {
         settings_changed = true;
       }
     }
-    
+
     redirect_to_settings();
 }
 
@@ -330,7 +301,7 @@ void web_brightness_handler() {
       settings.brightness = state;
       settings_changed = true;
     }
-    
+
     redirect_to_settings();
 }
 
@@ -345,7 +316,7 @@ void web_clock_leds_handler() {
       settings.clock_leds_enabled = false;
     }
     settings_changed = true;
-    
+
     redirect_to_settings();
 }
 
@@ -371,21 +342,17 @@ void web_404_handler() {
   for (uint8_t i = 0; i < server.args(); i++) {
     message += " " + server.argName(i) + ": " + server.arg(i) + "\n";
   }
-  
+
   server.send(404, "text/plain", message);
 }
 
 void loop() {
-  if (WiFi.status() == WL_CONNECTED) {
     ArduinoOTA.handle();
     server.handleClient();
-    
+
     should_update_display();
-  } else {
-    Serial.println("Wifi not connected, restarting");
-    ESP.restart();
-  }
-  
+
+
   if (settings_changed) {
     strip.setBrightness(settings.brightness);
     strip.show();
@@ -405,7 +372,7 @@ void run_time_test() {
 
   settings.display_het_is = false;
   settings.display_uur_woord = false;
-  
+
   time_t now = time(nullptr);
   displayed_time = *localtime(&now);
   for (int hour = 0; hour <= 23; hour++) {
@@ -431,12 +398,12 @@ void should_update_display() {
   time_t now = time(nullptr);
   current_time = *localtime(&now);
   current_time.tm_sec = 0;
-  
+
   int time_diff_in_seconds = abs(difftime(mktime(&current_time), mktime(&displayed_time)));
   if (time_diff_in_seconds >= 60 && current_time.tm_year >= (2020 - 1900)) {
     display_should_be_updated = true;
     time_not_synced_yet = false;
-    
+
     displayed_time = *localtime(&now);
     displayed_time.tm_sec = 0;
   }
@@ -445,10 +412,10 @@ void should_update_display() {
 void update_time_displayed() {
     Serial.println("Updating display to new time!");
     Serial.println(asctime(&displayed_time));
-    
+
     onboard_led_flash(1000);
     strip_update_time_shown();
-    
+
     display_should_be_updated = false;
 }
 
@@ -462,7 +429,7 @@ void onboard_led_flash(int wait) {
   digitalWrite(LED_BUILTIN, LOW);
   delay(wait);
   digitalWrite(LED_BUILTIN, HIGH);
-  delay(wait);  
+  delay(wait);
 }
 
 void strip_update_time_shown() {
@@ -473,19 +440,19 @@ void strip_update_time_shown() {
   }
 
   strip.clear();
-  
+
   int hours = displayed_time.tm_hour;
   int minutes  = displayed_time.tm_min;
-  
+
   // Single minutes
   int single_minutes = minutes % 5;
   if (single_minutes > 0 && settings.display_corner_minutes) {
     strip_apply_mask(single_minutes_mask[single_minutes - 1]);
   }
- 
+
   // Five minutes
   int five_minutes = minutes - single_minutes;
-    
+
   // Hours
   hours = hours % 12;
 
@@ -500,7 +467,7 @@ void strip_update_time_shown() {
   if(settings.hour_specials && minutes == 0) {
     strip_tree(100, 8000);
   }
-      
+
   // Display: Het is
   if (settings.display_het_is)
     strip_apply_mask(het_is_mask);
@@ -595,7 +562,7 @@ void strip_test_sequence(int sequence_interval, int wait, uint32_t color) {
   // set max brightness
   strip.setBrightness(255);
   strip.show();
-  
+
   // loop through all rows
   for(int i = 0; i < 11; i++){
     // loop through all pixels per row
@@ -659,12 +626,12 @@ void strip_tree(int sequence_interval, long wait){
   delay(500);
 
   unsigned long start_time_millis = millis();
-  
+
   do {
 
     // Draw all stars in tree_stars array
     for (byte j = 0; j < 15; j++) {
-      
+
       // Create random multiplier for delay between stars
       int randomMultiplier = random(1, 2);
       // Create random intensity value
@@ -675,12 +642,12 @@ void strip_tree(int sequence_interval, long wait){
       int randomG = random(0, 255);
       // Create random b value
       int randomB = random(0, 255);
-      
-      
+
+
       strip.setPixelColor(tree_stars[j] - 1, strip.Color(randomR, randomG, randomB, 0));
       strip.show();
       delay(sequence_interval*randomMultiplier);
-  
+
       // If there is a previous enabled star set previous enabled star back to off
       if(j != 0){
         strip.setPixelColor(tree_stars[j - 1] - 1, strip.Color(0, 0, 0, 0));
@@ -700,11 +667,11 @@ void strip_tree(int sequence_interval, long wait){
        tree_stars[n] =  tree_stars[h];
        tree_stars[h] = temp;
     }
-    
+
   } while (millis() < start_time_millis + wait);
 
   delay(500);
-  
+
   // reset leds
   strip.clear();
   strip.show();
@@ -719,7 +686,7 @@ void strip_new_year(long wait) {
     int randomColIndex = random(0,9);
     int randomColItemIndex = random(0,10);
     int randomLed = columns[randomColIndex][randomColItemIndex];
-      
+
     // Create random multiplier for delay between stars
     int randomMultiplier = random(1, 3);
     // Create random intensity value
@@ -730,7 +697,7 @@ void strip_new_year(long wait) {
     int randomG = random(0, 255);
     // Create random b value
     int randomB = random(0, 255);
-    
+
     strip.setPixelColor(randomLed - 1, strip.Color(randomR, randomG, randomB, 0));
     strip.show();
     delay(50*randomMultiplier);
@@ -743,11 +710,11 @@ void strip_new_year(long wait) {
     }
 
     previousLed = randomLed;
-    
+
   } while (millis() < (start_time_millis + wait));
 
   delay(500);
-  
+
   // reset leds
   strip.clear();
   strip.show();
