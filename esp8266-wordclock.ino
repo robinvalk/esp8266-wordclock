@@ -192,6 +192,8 @@ void setup() {
     ESP.restart(); // originally ESP.reset()
     delay(1000);
   }
+  WiFi.setAutoReconnect(true);
+  WiFi.persistent(true);
   
   Serial.print("IP for web server is ");
   Serial.println(WiFi.localIP());
@@ -382,8 +384,7 @@ void loop() {
     
     should_update_display();
   } else {
-    Serial.println("Wifi not connected, restarting");
-    ESP.restart();
+    Serial.println("Wifi not connected, it should auto recover so not reacting to it...");
   }
   
   if (settings_changed) {
